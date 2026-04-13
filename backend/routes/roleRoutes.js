@@ -9,7 +9,8 @@ const ALLOWED_ROLES = ["admin", "secretary", "cashier", "member"];
 
 router.post("/select", requireAuth, async (req, res, next) => {
   try {
-    const { role, email, firstName, lastName } = req.body || {};
+    const { role, email, firstName, lastName, flatNumber } = req.body || {};
+    const normalizedFlatNumber = (flatNumber || "").trim();
 
     if (!ALLOWED_ROLES.includes(role)) {
       return res.status(400).json({ message: "Invalid role selection" });
@@ -24,11 +25,13 @@ router.post("/select", requireAuth, async (req, res, next) => {
         role,
         firstName: firstName || "",
         lastName: lastName || "",
+        flatNumber: normalizedFlatNumber,
       });
     } else {
       user.role = role;
-      if (!user.firstName && firstName) user.firstName = firstName;
-      if (!user.lastName && lastName) user.lastName = lastName;
+      if (firstName) user.firstName = firstName;
+      if (lastName) user.lastName = lastName;
+      if (normalizedFlatNumber) user.flatNumber = normalizedFlatNumber;
     }
 
     try {
@@ -43,8 +46,9 @@ router.post("/select", requireAuth, async (req, res, next) => {
         throw saveError;
       }
       existing.role = role;
-      if (!existing.firstName && firstName) existing.firstName = firstName;
-      if (!existing.lastName && lastName) existing.lastName = lastName;
+      if (firstName) existing.firstName = firstName;
+      if (lastName) existing.lastName = lastName;
+      if (normalizedFlatNumber) existing.flatNumber = normalizedFlatNumber;
       await existing.save();
       user = existing;
     }
