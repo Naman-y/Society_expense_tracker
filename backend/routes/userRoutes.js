@@ -8,11 +8,12 @@ const router = express.Router();
 router.post("/sync", requireAuth, async (req, res, next) => {
   try {
     const clerkId = req.auth.userId;
-    const { email, firstName, lastName, preferredRole } = req.body;
+    const { email, firstName, lastName, preferredRole, flatNumber } = req.body;
     const allowedRoles = ["admin", "secretary", "cashier", "member"];
     const normalizedRole = allowedRoles.includes(preferredRole)
       ? preferredRole
       : null;
+    const normalizedFlatNumber = (flatNumber || "").trim();
 
     let user = await User.findOne({ clerkId });
 
@@ -22,12 +23,16 @@ router.post("/sync", requireAuth, async (req, res, next) => {
         firstName: firstName || "",
         lastName: lastName || "",
         role: normalizedRole || "member",
+        flatNumber: normalizedFlatNumber,
       });
     } else {
       user.firstName = firstName || user.firstName || "";
       user.lastName = lastName || user.lastName || "";
       if (normalizedRole) {
         user.role = normalizedRole;
+      }
+      if (normalizedFlatNumber) {
+        user.flatNumber = normalizedFlatNumber;
       }
     }
 
@@ -51,6 +56,9 @@ router.post("/sync", requireAuth, async (req, res, next) => {
       existing.lastName = lastName || existing.lastName || "";
       if (normalizedRole) {
         existing.role = normalizedRole;
+      }
+      if (normalizedFlatNumber) {
+        existing.flatNumber = normalizedFlatNumber;
       }
       await existing.save();
       user = existing;
