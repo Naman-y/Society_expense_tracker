@@ -8,24 +8,46 @@ const router = express.Router();
 router.post("/sync", requireAuth, async (req, res, next) => {
   try {
     const clerkId = req.auth.userId;
-    const { email, firstName, lastName, preferredRole } = req.body;
+    const { email, firstName, lastName, flatNumber, preferredRole } = req.body;
     const allowedRoles = ["admin", "secretary", "cashier", "member"];
     const normalizedRole = allowedRoles.includes(preferredRole)
       ? preferredRole
       : null;
+    const hasFirstName = Object.prototype.hasOwnProperty.call(req.body || {}, "firstName");
+    const hasLastName = Object.prototype.hasOwnProperty.call(req.body || {}, "lastName");
+    const hasFlatNumber = Object.prototype.hasOwnProperty.call(req.body || {}, "flatNumber");
+    const normalizedFirstName = (firstName || "").trim();
+    const normalizedLastName = (lastName || "").trim();
+    const normalizedFlatNumber = (flatNumber || "").trim().toUpperCase();
 
     let user = await User.findOne({ clerkId });
 
     if (!user) {
       user = new User({
         clerkId,
-        firstName: firstName || "",
-        lastName: lastName || "",
+        firstName: normalizedFirstName,
+        lastName: normalizedLastName,
+        flatNumber: normalizedFlatNumber,
         role: normalizedRole || "member",
       });
     } else {
-      user.firstName = firstName || user.firstName || "";
-      user.lastName = lastName || user.lastName || "";
+      const previousFlatNumber = user.flatNumber || "";
+      const nextFirstName = hasFirstName ? normalizedFirstName : user.firstName || "";
+      const nextLastName = hasLastName ? normalizedLastName : user.lastName || "";
+      const nextFlatNumber = hasFlatNumber ? normalizedFlatNumber : user.flatNumber || "";
+
+      user.firstName = nextFirstName;
+      user.lastName = nextLastName;
+      user.flatNumber = nextFlatNumber;
+
+      if (hasFlatNumber && previousFlatNumber && previousFlatNumber !== nextFlatNumber) {
+        user.flatOwnerName = "";
+        user.phoneNumber = "";
+        user.secretarySince = "";
+        user.roleSince = "";
+        user.profileCompleted = false;
+      }
+
       if (normalizedRole) {
         user.role = normalizedRole;
       }
@@ -47,8 +69,20 @@ router.post("/sync", requireAuth, async (req, res, next) => {
         throw saveError;
       }
 
-      existing.firstName = firstName || existing.firstName || "";
-      existing.lastName = lastName || existing.lastName || "";
+      const previousFlatNumber = existing.flatNumber || "";
+
+      existing.firstName = hasFirstName ? normalizedFirstName : existing.firstName || "";
+      existing.lastName = hasLastName ? normalizedLastName : existing.lastName || "";
+      existing.flatNumber = hasFlatNumber ? normalizedFlatNumber : existing.flatNumber || "";
+
+      if (hasFlatNumber && previousFlatNumber && previousFlatNumber !== existing.flatNumber) {
+        existing.flatOwnerName = "";
+        existing.phoneNumber = "";
+        existing.secretarySince = "";
+        existing.roleSince = "";
+        existing.profileCompleted = false;
+      }
+
       if (normalizedRole) {
         existing.role = normalizedRole;
       }
