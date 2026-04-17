@@ -15,6 +15,7 @@ const roleRoutes = require("./routes/roleRoutes");
 const adminRoutes = require("./routes/adminRoutes");
 const cashierRoutes = require("./routes/cashierRoutes");
 const noticeRoutes = require("./routes/noticeRoutes");
+const ledgerRoutes = require("./routes/ledgerRoutes");
 
 dotenv.config();
 
@@ -48,6 +49,7 @@ app.use("/api/roles", roleRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/cashier", cashierRoutes);
 app.use("/api/notices", noticeRoutes);
+app.use("/api/ledger", ledgerRoutes);
 
 app.use((err, req, res, next) => {
   console.error(err);
