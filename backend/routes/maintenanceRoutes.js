@@ -7,6 +7,12 @@ const requireAuth = require("../middleware/requireAuth");
 const authorizeRoles = require("../middleware/authorizeRoles");
 const User = require("../models/User");
 const MaintenanceReceipt = require("../models/MaintenanceReceipt");
+const {
+  getInitialReconciliationStatus,
+  normalizePaymentMode,
+  normalizeReconciliationStatus,
+  normalizeTransactionReference,
+} = require("../utils/paymentReconciliation");
 
 const router = express.Router();
 
@@ -40,9 +46,9 @@ router.post(
   requireAuth,
   authorizeRoles("member", "admin", "secretary", "cashier"),
   upload.single("receipt"),
-  async (req, res, next) => {
+    async (req, res, next) => {
     try {
-      const { month, amount, paymentDate, notes } = req.body;
+      const { month, amount, paymentDate, paymentMode, transactionReference, notes } = req.body;
 
       if (!month || !/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
         return res.status(400).json({ message: "Month must be in YYYY-MM format" });
@@ -54,6 +60,13 @@ router.post(
 
       if (!paymentDate) {
         return res.status(400).json({ message: "Payment date is required" });
+      }
+
+      const resolvedPaymentMode = normalizePaymentMode(paymentMode);
+      const resolvedReference = normalizeTransactionReference(transactionReference);
+
+      if (resolvedPaymentMode !== "cash" && !resolvedReference) {
+        return res.status(400).json({ message: "Transaction reference is required for non-cash payments" });
       }
 
       if (!req.file) {
@@ -69,8 +82,14 @@ router.post(
         month,
         amount: Number(amount),
         paymentDate: new Date(paymentDate),
+        paymentMode: resolvedPaymentMode,
+        transactionReference: resolvedReference,
         notes: (notes || "").trim(),
         receiptUrl: normalizeReceiptUrl(req.file.filename),
+        reconciliationStatus: getInitialReconciliationStatus({
+          paymentMode: resolvedPaymentMode,
+          transactionReference: resolvedReference,
+        }),
       });
 
       return res.status(201).json(receipt);
@@ -117,7 +136,7 @@ router.patch(
   async (req, res, next) => {
     try {
       const { id } = req.params;
-      const { verificationStatus, verificationRemark } = req.body;
+      const { verificationStatus, verificationRemark, reconciliationStatus, reconciliationRemark } = req.body;
 
       if (!["verified", "rejected"].includes(verificationStatus)) {
         return res.status(400).json({
@@ -125,12 +144,30 @@ router.patch(
         });
       }
 
-      const receipt = await MaintenanceReceipt.findByIdAndUpdate(
+      const receipt = await MaintenanceReceipt.findById(id).lean();
+
+      if (!receipt) {
+        return res.status(404).json({ message: "Receipt not found" });
+      }
+
+      const resolvedReconciliationStatus =
+        verificationStatus === "rejected"
+          ? "pending"
+          : normalizeReconciliationStatus(
+              reconciliationStatus,
+              receipt.paymentMode === "cash" ? "manual_review" : getInitialReconciliationStatus(receipt)
+            );
+
+      const updatedReceipt = await MaintenanceReceipt.findByIdAndUpdate(
         id,
         {
           $set: {
             verificationStatus,
             verificationRemark: (verificationRemark || "").trim(),
+            reconciliationStatus: resolvedReconciliationStatus,
+            reconciliationRemark: (reconciliationRemark || "").trim(),
+            reconciledByClerkId: req.currentUser.clerkId,
+            reconciledAt: new Date(),
             verifiedByClerkId: req.currentUser.clerkId,
             verifiedAt: new Date(),
           },
@@ -138,11 +175,7 @@ router.patch(
         { new: true }
       );
 
-      if (!receipt) {
-        return res.status(404).json({ message: "Receipt not found" });
-      }
-
-      return res.json(receipt);
+      return res.json(updatedReceipt);
     } catch (error) {
       return next(error);
     }

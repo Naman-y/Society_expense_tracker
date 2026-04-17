@@ -7,6 +7,10 @@ const Expense = require("../models/Expense");
 const Notice = require("../models/Notice");
 const MaintenanceReceipt = require("../models/MaintenanceReceipt");
 const { buildBalance } = require("../utils/dashboardFinance");
+const {
+  getInitialReconciliationStatus,
+  normalizeReconciliationStatus,
+} = require("../utils/paymentReconciliation");
 
 const router = express.Router();
 
@@ -33,7 +37,7 @@ router.get(
             .sort({ verifiedAt: -1 })
             .limit(25)
             .lean(),
-          Expense.find({ month: currentMonth }).sort({ expenseDate: -1 }).limit(30).lean(),
+          Expense.find({ month: currentMonth, approvalStatus: "approved" }).sort({ expenseDate: -1 }).limit(30).lean(),
           Notice.find({}).sort({ pinned: -1, createdAt: -1 }).limit(15).lean(),
           User.find({}).sort({ createdAt: -1 }).limit(100).lean(),
         ]);
@@ -64,6 +68,8 @@ router.get(
         summary: {
           pendingCount: pendingReceipts.length,
           verifiedCount: verifiedReceipts.length,
+          matchedCount: verifiedReceipts.filter((item) => item.reconciliationStatus === "matched").length,
+          manualReviewCount: verifiedReceipts.filter((item) => item.reconciliationStatus === "manual_review").length,
           expensesTotal: currentMonthExpenses.reduce((sum, item) => sum + (item.amount || 0), 0),
           receiptsTotal: balance.verifiedIncome,
           openingBalance: balance.openingBalance,
@@ -89,11 +95,27 @@ router.patch(
   async (req, res, next) => {
     try {
       const { id } = req.params;
-      const { verificationStatus, verificationRemark } = req.body;
+      const { verificationStatus, verificationRemark, reconciliationStatus, reconciliationRemark } = req.body;
 
       if (!["verified", "rejected"].includes(verificationStatus)) {
         return res.status(400).json({ message: "verificationStatus must be verified or rejected" });
       }
+
+      const existingReceipt = await MaintenanceReceipt.findById(id).lean();
+
+      if (!existingReceipt) {
+        return res.status(404).json({ message: "Receipt not found" });
+      }
+
+      const resolvedReconciliationStatus =
+        verificationStatus === "rejected"
+          ? "pending"
+          : normalizeReconciliationStatus(
+              reconciliationStatus,
+              existingReceipt.paymentMode === "cash"
+                ? "manual_review"
+                : getInitialReconciliationStatus(existingReceipt)
+            );
 
       const receipt = await MaintenanceReceipt.findByIdAndUpdate(
         id,
@@ -101,6 +123,10 @@ router.patch(
           $set: {
             verificationStatus,
             verificationRemark: (verificationRemark || "").trim(),
+            reconciliationStatus: resolvedReconciliationStatus,
+            reconciliationRemark: (reconciliationRemark || "").trim(),
+            reconciledByClerkId: req.currentUser.clerkId,
+            reconciledAt: new Date(),
             verifiedByClerkId: req.currentUser.clerkId,
             verifiedAt: new Date(),
           },

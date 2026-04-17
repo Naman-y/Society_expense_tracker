@@ -6,7 +6,9 @@ const User = require("../models/User");
 const Expense = require("../models/Expense");
 const MaintenanceReceipt = require("../models/MaintenanceReceipt");
 const Notice = require("../models/Notice");
+const AuditLog = require("../models/AuditLog");
 const { buildBalance } = require("../utils/dashboardFinance");
+const { createAuditLog } = require("../utils/auditLogger");
 
 const router = express.Router();
 
@@ -23,11 +25,13 @@ router.get(
       const now = new Date();
       const currentMonth = getMonthValue(now);
 
-      const [users, expenses, receipts, notices] = await Promise.all([
+      const [users, expenses, pendingExpenses, receipts, notices, auditLogs] = await Promise.all([
         User.find({}).sort({ createdAt: -1 }).lean(),
-        Expense.find({ month: currentMonth }).sort({ expenseDate: -1 }).limit(50).lean(),
+        Expense.find({ month: currentMonth, approvalStatus: "approved" }).sort({ expenseDate: -1 }).limit(50).lean(),
+        Expense.find({ approvalStatus: "pending" }).sort({ createdAt: -1 }).limit(20).lean(),
         MaintenanceReceipt.find({}).sort({ createdAt: -1 }).limit(50).lean(),
         Notice.find({}).sort({ pinned: -1, createdAt: -1 }).limit(20).lean(),
+        AuditLog.find({}).sort({ createdAt: -1 }).limit(25).lean(),
       ]);
 
       const userCounts = users.reduce(
@@ -84,12 +88,15 @@ router.get(
           totalAssets: balance.totalAssets,
           pendingReceipts,
           verifiedReceipts,
+          pendingExpenseApprovals: pendingExpenses.length,
         },
         users,
         recentExpenses: expenses,
+        pendingExpenses,
         receipts,
         notices,
         expensesByCategory,
+        auditLogs,
       });
     } catch (error) {
       return next(error);
@@ -121,6 +128,18 @@ router.patch(
         { $set: { role } },
         { new: true }
       );
+
+      await createAuditLog({
+        entityType: "user",
+        entityId: user.clerkId,
+        action: "user_role_updated",
+        actor: req.currentUser,
+        summary: `Role updated to ${role} for ${`${user.firstName || ""} ${user.lastName || ""}`.trim() || user.clerkId}`,
+        metadata: {
+          targetClerkId: user.clerkId,
+          role,
+        },
+      });
 
       return res.json(user);
     } catch (error) {

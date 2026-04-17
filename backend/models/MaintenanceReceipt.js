@@ -30,6 +30,18 @@ const maintenanceReceiptSchema = new mongoose.Schema(
       type: Date,
       required: true,
     },
+    paymentMode: {
+      type: String,
+      enum: ["upi", "bank_transfer", "cash", "cheque", "card", "other"],
+      default: "upi",
+      index: true,
+    },
+    transactionReference: {
+      type: String,
+      default: "",
+      trim: true,
+      index: true,
+    },
     notes: {
       type: String,
       default: "",
@@ -43,6 +55,24 @@ const maintenanceReceiptSchema = new mongoose.Schema(
       enum: ["pending", "verified", "rejected"],
       default: "pending",
       index: true,
+    },
+    reconciliationStatus: {
+      type: String,
+      enum: ["pending", "matched", "manual_review"],
+      default: "pending",
+      index: true,
+    },
+    reconciledByClerkId: {
+      type: String,
+      default: "",
+    },
+    reconciledAt: {
+      type: Date,
+      default: null,
+    },
+    reconciliationRemark: {
+      type: String,
+      default: "",
     },
     verifiedByClerkId: {
       type: String,
