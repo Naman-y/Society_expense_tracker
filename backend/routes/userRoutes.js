@@ -13,6 +13,7 @@ router.post("/sync", requireAuth, async (req, res, next) => {
     const normalizedRole = allowedRoles.includes(preferredRole)
       ? preferredRole
       : null;
+    const normalizedFlatNumber = (flatNumber || "").trim();
 
     const hasFirstName = firstName !== undefined;
     const hasLastName = lastName !== undefined;
