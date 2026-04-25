@@ -8,11 +8,19 @@ const router = express.Router();
 router.post("/sync", requireAuth, async (req, res, next) => {
   try {
     const clerkId = req.auth.userId;
-    const { email, firstName, lastName, flatNumber preferredRole } = req.body;
+    const { email, firstName, lastName, flatNumber, preferredRole } = req.body;
     const allowedRoles = ["admin", "secretary", "cashier", "member"];
     const normalizedRole = allowedRoles.includes(preferredRole)
       ? preferredRole
       : null;
+
+    const hasFirstName = firstName !== undefined;
+    const hasLastName = lastName !== undefined;
+    const hasFlatNumber = flatNumber !== undefined;
+
+    const normalizedFirstName = hasFirstName ? String(firstName).trim() : undefined;
+    const normalizedLastName = hasLastName ? String(lastName).trim() : undefined;
+    const normalizedFlatNumber = hasFlatNumber ? String(flatNumber).trim() : undefined;
 
     let user = await User.findOne({ clerkId });
 
