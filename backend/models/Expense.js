@@ -41,6 +41,32 @@ const expenseSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    approvalStatus: {
+      type: String,
+      enum: ["pending", "approved", "rejected"],
+      default: "pending",
+      index: true,
+    },
+    submittedByName: {
+      type: String,
+      default: "",
+    },
+    approvalRequired: {
+      type: Boolean,
+      default: true,
+    },
+    approvedByClerkId: {
+      type: String,
+      default: "",
+    },
+    approvedAt: {
+      type: Date,
+      default: null,
+    },
+    approvalRemark: {
+      type: String,
+      default: "",
+    },
     billUrl: {
       type: String,
       default: "",

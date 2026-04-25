@@ -36,7 +36,7 @@ router.get("/member", requireAuth, async (req, res, next) => {
       .limit(10)
       .lean();
 
-    const currentMonthExpenses = await Expense.find({ month: currentMonth })
+    const currentMonthExpenses = await Expense.find({ month: currentMonth, approvalStatus: "approved" })
       .sort({ expenseDate: -1 })
       .lean();
 

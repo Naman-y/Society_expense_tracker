@@ -8,26 +8,50 @@ const router = express.Router();
 router.post("/sync", requireAuth, async (req, res, next) => {
   try {
     const clerkId = req.auth.userId;
-    const { email, firstName, lastName, preferredRole, flatNumber } = req.body;
+    const { email, firstName, lastName, flatNumber, preferredRole } = req.body;
     const allowedRoles = ["admin", "secretary", "cashier", "member"];
     const normalizedRole = allowedRoles.includes(preferredRole)
       ? preferredRole
       : null;
     const normalizedFlatNumber = (flatNumber || "").trim();
 
+    const hasFirstName = firstName !== undefined;
+    const hasLastName = lastName !== undefined;
+    const hasFlatNumber = flatNumber !== undefined;
+
+    const normalizedFirstName = hasFirstName ? String(firstName).trim() : undefined;
+    const normalizedLastName = hasLastName ? String(lastName).trim() : undefined;
+    const normalizedFlatNumber = hasFlatNumber ? String(flatNumber).trim() : undefined;
+
     let user = await User.findOne({ clerkId });
 
     if (!user) {
       user = new User({
         clerkId,
-        firstName: firstName || "",
-        lastName: lastName || "",
+        firstName: normalizedFirstName,
+        lastName: normalizedLastName,
+        flatNumber: normalizedFlatNumber,
         role: normalizedRole || "member",
         flatNumber: normalizedFlatNumber,
       });
     } else {
-      user.firstName = firstName || user.firstName || "";
-      user.lastName = lastName || user.lastName || "";
+      const previousFlatNumber = user.flatNumber || "";
+      const nextFirstName = hasFirstName ? normalizedFirstName : user.firstName || "";
+      const nextLastName = hasLastName ? normalizedLastName : user.lastName || "";
+      const nextFlatNumber = hasFlatNumber ? normalizedFlatNumber : user.flatNumber || "";
+
+      user.firstName = nextFirstName;
+      user.lastName = nextLastName;
+      user.flatNumber = nextFlatNumber;
+
+      if (hasFlatNumber && previousFlatNumber && previousFlatNumber !== nextFlatNumber) {
+        user.flatOwnerName = "";
+        user.phoneNumber = "";
+        user.secretarySince = "";
+        user.roleSince = "";
+        user.profileCompleted = false;
+      }
+
       if (normalizedRole) {
         user.role = normalizedRole;
       }
@@ -52,8 +76,20 @@ router.post("/sync", requireAuth, async (req, res, next) => {
         throw saveError;
       }
 
-      existing.firstName = firstName || existing.firstName || "";
-      existing.lastName = lastName || existing.lastName || "";
+      const previousFlatNumber = existing.flatNumber || "";
+
+      existing.firstName = hasFirstName ? normalizedFirstName : existing.firstName || "";
+      existing.lastName = hasLastName ? normalizedLastName : existing.lastName || "";
+      existing.flatNumber = hasFlatNumber ? normalizedFlatNumber : existing.flatNumber || "";
+
+      if (hasFlatNumber && previousFlatNumber && previousFlatNumber !== existing.flatNumber) {
+        existing.flatOwnerName = "";
+        existing.phoneNumber = "";
+        existing.secretarySince = "";
+        existing.roleSince = "";
+        existing.profileCompleted = false;
+      }
+
       if (normalizedRole) {
         existing.role = normalizedRole;
       }
